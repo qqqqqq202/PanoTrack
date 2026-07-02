@@ -45,15 +45,10 @@ We lift keypoints directly to the unit sphere **S²** and solve there.
 
 | Metric | Value |
 |--------|-------|
-| Mean position error | 2.16 m |
+| Mean position error | 2.22 m |
 | Path length | 21 m |
 | Drift rate | ~10% |
-| Processing | 0.16 s/frame (CPU, ORB + RANSAC 2000iter) |
-
-> **Note:** ~10% drift is the practical floor for frame-to-frame monocular VO
-> without bundle adjustment. Turning frames suffer from ill-conditioned
-> essential matrix geometry — a known limitation discussed in the literature.
-> See [Limitations](#limitations) for planned improvements.
+| Processing | 0.05 s/frame (CPU, ORB) |
 
 ---
 

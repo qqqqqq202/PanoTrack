@@ -50,8 +50,9 @@ class FeatureMatcher:
             self._init_flann()
 
     def _init_flann(self):
-        """Initialize matcher — norm auto-selected based on descriptor type."""
-        self._bf = None  # Created on first use based on descriptor dtype
+        """Initialize matcher — BFMatcher for binary, FLANN for float."""
+        self._binary = True  # default for ORB
+        self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
     def match(self, kpts1, descs1, kpts2, descs2, width, height):
         """
@@ -120,15 +121,9 @@ class FeatureMatcher:
         return matches
 
     def _match_flann(self, kpts1, descs1, kpts2, descs2):
-        """Match using BFMatcher + Lowe's ratio test. Auto-selects norm."""
+        """Match using BFMatcher + Lowe's ratio test."""
         if len(kpts1) < 2 or len(kpts2) < 2:
             return []
-
-        # Auto-select distance metric based on descriptor type
-        if descs1.dtype == np.uint8:
-            self._bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-        else:
-            self._bf = cv2.BFMatcher(cv2.NORM_L2, crossCheck=False)
 
         raw_matches = self._bf.knnMatch(descs1, descs2, k=2)
 

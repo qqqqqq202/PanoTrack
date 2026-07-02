@@ -20,8 +20,3 @@ D:/edge download/
 # OS
 .DS_Store
 Thumbs.db
-
-# Large binary files excluded from git (regenerate locally)
-results/*.png
-results/stanford/*.png
-data/proc_scene_v2/**/*.png

@@ -62,7 +62,7 @@ def main():
     parser.add_argument("--data-dir", type=str, default="data/proc_scene",
                         help="Path to generated dataset")
     parser.add_argument("--backend", type=str, default="orb",
-                        choices=["orb", "superpoint", "sift"],
+                        choices=["orb", "superpoint"],
                         help="Feature extraction backend")
     parser.add_argument("--device", type=str, default="cpu",
                         help="Device (cpu/cuda)")
