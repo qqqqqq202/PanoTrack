@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.claude/
+.vscode/
+
+# Generated data (re-create with generate_data.py)
+data/proc_scene/
+data/proc_scene_v1/
+
+# Stanford dataset (too large, user provides separately)
+D:/edge download/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+numpy>=1.24.0
+scipy>=1.10.0
+opencv-python>=4.8.0
+matplotlib>=3.7.0
+trimesh>=4.0.0
+pyglet>=2.0.0
+torch>=2.0.0
+kornia>=0.7.0
+
