@@ -205,17 +205,35 @@ def decompose_essential(E, bearings1, bearings2):
         (R2, -t),
     ]
 
-    best_count = -1
+    best_score = -np.inf
     best_R, best_t = R1, t
+    best_count = 0
 
     for R_cand, t_cand in solutions:
         count = _count_points_in_front_spherical(
             bearings1, bearings2, R_cand, t_cand
         )
-        if count > best_count:
-            best_count = count
+
+        # Score: front_count + epipolar consistency
+        # Higher is better. We weight front_count heavily but also
+        # consider the median epipolar error (lower error = better).
+        t_norm = t_cand / (np.linalg.norm(t_cand) + 1e-10)
+        E_cand = np.cross(np.eye(3), t_norm) @ R_cand
+
+        # Compute epipolar errors for all bearings
+        Ex = E_cand @ bearings1.T
+        epi_errs = np.abs(np.sum(bearings2 * Ex.T, axis=-1))
+
+        # Score: combine front ratio with negative median epipolar error
+        front_ratio = count / max(len(bearings1), 1)
+        median_epi = np.median(epi_errs)
+        score = front_ratio * 100 - median_epi * 10  # weight front more
+
+        if score > best_score:
+            best_score = score
             best_R = R_cand
             best_t = t_cand
+            best_count = count
 
     # Normalize translation
     best_t = best_t / (np.linalg.norm(best_t) + 1e-10)
@@ -281,6 +299,92 @@ def _count_points_in_front_spherical(bearings1, bearings2, R, t):
             count += 1
 
     return count
+
+
+def refine_pose_nonlinear(R_init, t_init, bearings1, bearings2, max_iter=50):
+    """
+    Nonlinear refinement of relative pose using all inlier bearings.
+
+    Minimizes the algebraic epipolar error over (R, t) directly on the sphere:
+        min_{R,t}  sum_i (b2_i^T · [t]_x · R · b1_i)^2
+
+    Parameterized as:
+      Rotation: axis-angle (3 params) → R = exp([ω]_x)
+      Translation: unit sphere lat/lon (2 params) → t = (cosφ cosλ, cosφ sinλ, sinφ)
+
+    Args:
+        R_init: (3, 3) initial rotation matrix.
+        t_init: (3,) initial translation (unit vector).
+        bearings1, bearings2: (N, 3) inlier bearings on unit sphere.
+        max_iter: max LM iterations.
+
+    Returns:
+        R_refined: (3, 3) refined rotation.
+        t_refined: (3,) refined translation (unit vector).
+        cost: final mean squared error.
+    """
+    from scipy.optimize import least_squares
+    from scipy.linalg import expm
+
+    b1 = np.asarray(bearings1, dtype=np.float64)
+    b2 = np.asarray(bearings2, dtype=np.float64)
+
+    # Initial parameters: axis-angle for R + spherical coords for t
+    def R_to_aa(R):
+        """Rotation matrix → axis-angle (compact, 3 values)."""
+        angle = np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1))
+        if angle < 1e-10:
+            return np.zeros(3)
+        axis = np.array([R[2, 1] - R[1, 2],
+                         R[0, 2] - R[2, 0],
+                         R[1, 0] - R[0, 1]]) / (2 * np.sin(angle))
+        return angle * axis
+
+    def aa_to_R(aa):
+        """Axis-angle → rotation matrix."""
+        angle = np.linalg.norm(aa)
+        if angle < 1e-10:
+            return np.eye(3)
+        axis = aa / angle
+        return expm(np.cross(np.eye(3), axis * angle))
+
+    def t_to_sph(t):
+        """Unit vector → spherical coordinates (lat, lon)."""
+        t = t / (np.linalg.norm(t) + 1e-10)
+        lat = np.arcsin(np.clip(t[2], -1, 1))       # latitude
+        lon = np.arctan2(t[1], t[0])                 # longitude
+        return np.array([lat, lon])
+
+    def sph_to_t(sph):
+        """Spherical coordinates → unit vector."""
+        lat, lon = sph[0], sph[1]
+        return np.array([np.cos(lat) * np.cos(lon),
+                         np.cos(lat) * np.sin(lon),
+                         np.sin(lat)])
+
+    # Initial parameter vector: [aa_x, aa_y, aa_z, lat, lon]
+    aa0 = R_to_aa(R_init)
+    sph0 = t_to_sph(t_init)
+    params0 = np.concatenate([aa0, sph0])
+
+    def cost_fn(params):
+        R = aa_to_R(params[:3])
+        t = sph_to_t(params[3:5])
+        # Epipolar error for all points: b2^T [t]_x R b1
+        t_cross = np.array([[0, -t[2], t[1]],
+                            [t[2], 0, -t[0]],
+                            [-t[1], t[0], 0]])
+        E = t_cross @ R
+        errors = np.sum(b2 * (E @ b1.T).T, axis=-1)  # (N,)
+        return errors
+
+    result = least_squares(cost_fn, params0, method='lm',
+                           max_nfev=max_iter, verbose=0)
+
+    R_refined = aa_to_R(result.x[:3])
+    t_refined = sph_to_t(result.x[3:5])
+
+    return R_refined, t_refined, float(np.mean(np.abs(result.fun)))
 
 
 def relative_pose_error(R_est, t_est, R_gt, t_gt):

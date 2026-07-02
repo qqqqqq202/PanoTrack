@@ -16,10 +16,10 @@ import cv2
 class FeatureExtractor:
     """Unified feature extraction interface."""
 
-    def __init__(self, backend="superpoint", max_keypoints=1024, device="cpu"):
+    def __init__(self, backend="orb", max_keypoints=1024, device="cpu"):
         """
         Args:
-            backend: "superpoint" or "orb"
+            backend: "sift", "orb", or "superpoint"
             max_keypoints: maximum keypoints to retain.
             device: "cpu" or "cuda" (for superpoint).
         """
@@ -30,6 +30,8 @@ class FeatureExtractor:
 
         if backend == "superpoint":
             self._init_superpoint()
+        elif backend == "sift":
+            self._init_sift()
         elif backend == "orb":
             self._init_orb()
         else:
@@ -49,6 +51,10 @@ class FeatureExtractor:
             print(f"SuperPoint not available ({e}), falling back to ORB")
             self.backend = "orb"
             self._init_orb()
+
+    def _init_sift(self):
+        """Initialize OpenCV SIFT detector."""
+        self._sift = cv2.SIFT_create(nfeatures=self.max_keypoints)
 
     def _init_orb(self):
         """Initialize OpenCV ORB detector."""
@@ -73,8 +79,25 @@ class FeatureExtractor:
         """
         if self.backend == "superpoint":
             return self._extract_superpoint(image)
+        elif self.backend == "sift":
+            return self._extract_sift(image)
         else:
             return self._extract_orb(image)
+
+    def _extract_sift(self, image):
+        """Extract features using SIFT."""
+        if image.ndim == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = image
+
+        cv_kpts, descriptors = self._sift.detectAndCompute(gray, None)
+
+        if cv_kpts is None or len(cv_kpts) == 0:
+            return np.zeros((0, 2), dtype=np.float32), np.zeros((0, 128), dtype=np.float32)
+
+        keypoints = np.array([[kp.pt[0], kp.pt[1]] for kp in cv_kpts], dtype=np.float32)
+        return keypoints, descriptors
 
     def _extract_superpoint(self, image):
         """Extract features using SuperPoint."""
